@@ -36,8 +36,6 @@ export const HandTracker: React.FC<Props> = ({ onMetricsUpdate }) => {
         videoRef.current.srcObject = stream;
         
         // Robust play handling
-        // "The play() request was interrupted by a new load request" is a common DOMException
-        // when React unmounts/remounts quickly or srcObject changes.
         try {
           await videoRef.current.play();
         } catch (playError) {
@@ -56,9 +54,16 @@ export const HandTracker: React.FC<Props> = ({ onMetricsUpdate }) => {
         // Init Vision
         serviceRef.current = new VisionService(onMetricsUpdate);
         await serviceRef.current.initialize(videoRef.current);
+        
       } catch (err) {
         if (isMounted) {
-          console.error("Camera/Vision Init Failed", err);
+          // Suppress known "aborted" errors which happen during Strict Mode double-mount
+          const msg = (err instanceof Error) ? err.message : String(err);
+          const isNetworkAbort = msg.includes('aborted') || msg.includes('Network error');
+          
+          if (!isNetworkAbort) {
+            console.error("Camera/Vision Init Failed", err);
+          }
         }
       }
     };

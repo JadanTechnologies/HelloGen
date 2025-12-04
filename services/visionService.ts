@@ -6,36 +6,50 @@ export class VisionService {
   private video: HTMLVideoElement | null = null;
   private lastVideoTime = -1;
   private animationFrameId: number | null = null;
+  private isRunning = false;
 
   constructor(private onMetrics: (metrics: GestureMetrics) => void) {}
 
   async initialize(videoElement: HTMLVideoElement) {
+    if (!videoElement) return;
     this.video = videoElement;
     
-    const vision = await FilesetResolver.forVisionTasks(
-      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
-    );
+    try {
+      // Use a specific, stable version for the WASM files to prevent version mismatch or 404s on @latest
+      const vision = await FilesetResolver.forVisionTasks(
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm"
+      );
 
-    this.handLandmarker = await HandLandmarker.createFromOptions(vision, {
-      baseOptions: {
-        modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`,
-        delegate: "GPU"
-      },
-      runningMode: "VIDEO",
-      numHands: 2
-    });
+      this.handLandmarker = await HandLandmarker.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`,
+          delegate: "GPU"
+        },
+        runningMode: "VIDEO",
+        numHands: 2
+      });
 
-    this.startLoop();
+      this.isRunning = true;
+      this.startLoop();
+    } catch (error) {
+      // Re-throw so the caller (HandTracker) can handle logging
+      throw error;
+    }
   }
 
   private startLoop = () => {
+    if (!this.isRunning) return;
+
     if (this.video && this.handLandmarker) {
       if (this.video.currentTime !== this.lastVideoTime && this.video.readyState >= 2) {
         this.lastVideoTime = this.video.currentTime;
-        const result = this.handLandmarker.detectForVideo(this.video, performance.now());
-        
-        const metrics = this.processLandmarks(result.landmarks);
-        this.onMetrics(metrics);
+        try {
+          const result = this.handLandmarker.detectForVideo(this.video, performance.now());
+          const metrics = this.processLandmarks(result.landmarks);
+          this.onMetrics(metrics);
+        } catch (e) {
+          console.warn("Detection error:", e);
+        }
       }
     }
     this.animationFrameId = requestAnimationFrame(this.startLoop);
@@ -156,7 +170,9 @@ export class VisionService {
   }
 
   stop() {
+    this.isRunning = false;
     if (this.animationFrameId) cancelAnimationFrame(this.animationFrameId);
     this.handLandmarker?.close();
+    this.handLandmarker = null;
   }
 }
