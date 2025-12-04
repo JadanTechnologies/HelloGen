@@ -1,0 +1,7 @@
+{
+  "name": "MindParticle",
+  "description": "A real-time, interactive 3D particle system controlled by hand gestures. Uses MediaPipe for hand tracking and Three.js for GPU-accelerated graphics.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
