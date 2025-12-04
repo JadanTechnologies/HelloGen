@@ -10,6 +10,13 @@ interface Props {
 export const Scene3D: React.FC<Props> = ({ appState, gestureMetricsRef }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const threeServiceRef = useRef<ThreeService | null>(null);
+  
+  // Keep track of latest app state for the animation loop
+  const appStateRef = useRef(appState);
+
+  useEffect(() => {
+    appStateRef.current = appState;
+  }, [appState]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -17,13 +24,13 @@ export const Scene3D: React.FC<Props> = ({ appState, gestureMetricsRef }) => {
     // Init Three.js
     threeServiceRef.current = new ThreeService(
       containerRef.current, 
-      appState.particleCount
+      appStateRef.current.particleCount
     );
 
     // Animation Loop
     let animationId: number;
     const animate = (time: number) => {
-      threeServiceRef.current?.update(gestureMetricsRef.current, appState, time);
+      threeServiceRef.current?.update(gestureMetricsRef.current, appStateRef.current, time);
       animationId = requestAnimationFrame(animate);
     };
     animationId = requestAnimationFrame(animate);
@@ -33,7 +40,7 @@ export const Scene3D: React.FC<Props> = ({ appState, gestureMetricsRef }) => {
       threeServiceRef.current?.destroy();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Run once on mount. AppState updates are handled in the loop or separate effect if needed to rebuild geometry.
+  }, []); // Run once on mount. AppState updates are handled via the ref.
 
   return <div ref={containerRef} className="w-full h-full" />;
 };

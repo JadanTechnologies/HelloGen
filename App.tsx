@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Scene3D } from './components/Scene3D';
 import { UIOverlay } from './components/UIOverlay';
 import { HandTracker } from './components/HandTracker';
@@ -22,12 +22,12 @@ const App: React.FC = () => {
   // However, we also keep a state version 'metrics' for the UI (charts, indicators) which can update less frequently if needed
   const latestMetricsRef = useRef<GestureMetrics>(metrics);
 
-  const handleMetricsUpdate = (newMetrics: GestureMetrics) => {
+  const handleMetricsUpdate = useCallback((newMetrics: GestureMetrics) => {
     latestMetricsRef.current = newMetrics;
     // Debounce state update for UI if needed, or update every frame if performant enough.
     // For 60FPS UI updates, we can just set state.
     setMetrics(newMetrics);
-  };
+  }, []);
 
   const handleStateChange = (updates: Partial<AppState>) => {
     setAppState(prev => ({ ...prev, ...updates }));
