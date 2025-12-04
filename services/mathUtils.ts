@@ -12,9 +12,25 @@ export const generateGeometryPositions = (template: ParticleTemplate, count: num
 
     switch (template) {
       case ParticleTemplate.SPHERE: {
+        // Magical Globe World
+        // Layering: Core, Surface, Atmosphere
         const theta = 2 * Math.PI * u;
         const phi = Math.acos(2 * v - 1);
-        const r = 3.0 + w * 0.5; // Slightly fuzzy surface
+        
+        let r = 3.0;
+        const layer = w;
+
+        if (layer < 0.15) {
+          // Dense Core
+          r = 1.0 + Math.random() * 1.5;
+        } else if (layer < 0.85) {
+          // Surface / Crust (Main Globe)
+          r = 3.0 + (Math.random() - 0.5) * 0.1;
+        } else {
+          // Atmosphere / Clouds / Halo
+          r = 3.2 + Math.random() * 0.8;
+        }
+
         x = r * Math.sin(phi) * Math.cos(theta);
         y = r * Math.sin(phi) * Math.sin(theta);
         z = r * Math.cos(phi);

@@ -90,25 +90,23 @@ void main() {
   // Particles breathe/drift based on their distance from center
   finalPos += drift * 0.15;
 
-  // 3. Hand Interaction (Magical Swirl)
+  // 3. Hand Interaction (Magical Swirl - Local)
   // Scale world coordinates to match view approx
-  vec3 lh = uLeftHand; // Already in world space approx from JS
+  vec3 lh = uLeftHand; // Already in world space relative to object
   vec3 rh = uRightHand;
   
   // Right Hand Physics
   float dRight = distance(finalPos, rh);
   if (uPinchRight > 0.5) {
-     // Black Hole Mode
      float gravity = smoothstep(4.0, 0.0, dRight);
-     finalPos = mix(finalPos, rh, gravity * 0.5); // Suck in heavily
+     finalPos = mix(finalPos, rh, gravity * 0.5); 
   } else {
-     // Swirl Mode
      float influence = smoothstep(2.5, 0.0, dRight);
      if (influence > 0.0) {
         vec3 dir = normalize(finalPos - rh);
-        vec3 swirl = cross(vec3(0.0, 0.0, 1.0), dir); // Rotate around Z axis
-        finalPos += swirl * influence * 0.2; // Rotational force
-        finalPos += dir * influence * 0.3; // Gentle push away
+        vec3 swirl = cross(vec3(0.0, 0.0, 1.0), dir); 
+        finalPos += swirl * influence * 0.2; 
+        finalPos += dir * influence * 0.3; 
      }
   }
 
@@ -128,10 +126,6 @@ void main() {
   }
 
   // 4. Global Gestures
-  // Expansion (Universe expanding)
-  float expansion = 0.8 + uHandDist * 1.5; 
-  finalPos *= expansion;
-  
   // Tension Jitter (Energy overload)
   float tension = (uLeftTension + uRightTension) * 0.5;
   float jitter = snoise(finalPos * 2.0 + uTime * 10.0) * tension * 0.2;
@@ -151,7 +145,7 @@ void main() {
   gl_Position = projectionMatrix * mvPosition;
 
   // Fog effect
-  vAlpha = 1.0 - smoothstep(10.0, 25.0, -mvPosition.z);
+  vAlpha = 1.0 - smoothstep(15.0, 40.0, -mvPosition.z);
   vColor = vec3(1.0);
 }
 `;
@@ -200,7 +194,7 @@ export class ThreeService {
 
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 100);
-    this.camera.position.z = 8; // Moved back slightly for grander view
+    this.camera.position.z = 8; 
 
     this.initParticles(initialCount);
     window.addEventListener('resize', this.onResize);
@@ -281,27 +275,50 @@ export class ThreeService {
     this.material.uniforms.uTime.value = time * 0.001;
 
     // Viewport Calculations for Hand Mapping
-    // At z=8, FOV=75, visible height is approx 12.5 units.
-    // Visible width (16:9) is approx 22 units.
-    // Input X/Y is -1..1
     const viewHeight = 12.0;
     const aspect = this.camera.aspect;
     const viewWidth = viewHeight * aspect;
 
-    const smooth = 0.15; // Smooth hand movement
+    const smooth = 0.1; // Smooth movement factor
     
     if (metrics.hasHands) {
-      // Map Normalized DC (-1..1) to World Space
-      const targetLx = metrics.leftHandPos.x * (viewWidth * 0.5);
-      const targetLy = metrics.leftHandPos.y * (viewHeight * 0.5);
-      const targetRx = metrics.rightHandPos.x * (viewWidth * 0.5);
-      const targetRy = metrics.rightHandPos.y * (viewHeight * 0.5);
+      // 1. Move World (Pan)
+      // Calculate center of both hands in World Space (approx)
+      const cx = (metrics.leftHandPos.x + metrics.rightHandPos.x) / 2;
+      const cy = (metrics.leftHandPos.y + metrics.rightHandPos.y) / 2;
+      
+      const targetWorldX = cx * (viewWidth * 0.8);
+      const targetWorldY = cy * (viewHeight * 0.8);
+
+      // Smoothly interpolate the entire particle system to follow hands
+      this.particles.position.x += (targetWorldX - this.particles.position.x) * smooth;
+      this.particles.position.y += (targetWorldY - this.particles.position.y) * smooth;
+
+      // 2. Zoom (Scale)
+      // Close hands (dist ~0) -> Zoom Out (Camera Z increases)
+      // Far hands (dist ~1) -> Zoom In (Camera Z decreases)
+      // Base Z is 8.0. Range: 4.0 (Close) to 14.0 (Far).
+      // metrics.handDistance is approx 0.0 to 1.0
+      // We want: Dist 0.8 -> Z 5. Dist 0.2 -> Z 12.
+      const targetZ = 13.0 - (metrics.handDistance * 9.0);
+      this.camera.position.z += (targetZ - this.camera.position.z) * smooth;
+
+      // 3. Update Uniforms for Local Swirl (Relative to Object)
+      // Since object moves, hands must be relative to object for local shaders
+      const targetLx = (metrics.leftHandPos.x * viewWidth * 0.5) - this.particles.position.x;
+      const targetLy = (metrics.leftHandPos.y * viewHeight * 0.5) - this.particles.position.y;
+      const targetRx = (metrics.rightHandPos.x * viewWidth * 0.5) - this.particles.position.x;
+      const targetRy = (metrics.rightHandPos.y * viewHeight * 0.5) - this.particles.position.y;
 
       this.material.uniforms.uLeftHand.value.x += (targetLx - this.material.uniforms.uLeftHand.value.x) * smooth;
       this.material.uniforms.uLeftHand.value.y += (targetLy - this.material.uniforms.uLeftHand.value.y) * smooth;
       
       this.material.uniforms.uRightHand.value.x += (targetRx - this.material.uniforms.uRightHand.value.x) * smooth;
       this.material.uniforms.uRightHand.value.y += (targetRy - this.material.uniforms.uRightHand.value.y) * smooth;
+    } else {
+      // Auto-return to center if hands lost
+      this.particles.position.lerp(new THREE.Vector3(0,0,0), 0.05);
+      this.camera.position.z += (8.0 - this.camera.position.z) * 0.05;
     }
 
     // Color
@@ -317,8 +334,8 @@ export class ThreeService {
     this.material.uniforms.uPinchRight.value = metrics.isPinchingRight ? 1 : 0;
 
     // Rotation
-    this.particles.rotation.y += 0.001 + metrics.leftTension * 0.01;
-    this.particles.rotation.z = Math.sin(time * 0.0005) * 0.05;
+    this.particles.rotation.y += 0.002 + metrics.leftTension * 0.02;
+    // this.particles.rotation.z = Math.sin(time * 0.0005) * 0.05; // Remove wobble for better globe control
 
     this.renderer.render(this.scene, this.camera);
   }
