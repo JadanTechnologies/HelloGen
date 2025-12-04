@@ -73,81 +73,113 @@ float snoise(vec3 v) {
 }
 
 void main() {
-  // Morphing
+  // 1. Morphing Base
   vec3 finalPos = mix(position, positionTarget, uMorph);
 
-  // General "Breath" - slight expansion/contraction loop
-  finalPos *= 1.0 + sin(uTime * 0.5) * 0.05;
-
-  // Tension Effects (Hands closing)
-  // High tension -> Contract/Pulse Inward
-  float tension = (uLeftTension + uRightTension) * 0.5;
-  // Apply contraction: pull towards center based on tension squared (sharpness)
-  finalPos = mix(finalPos, normalize(finalPos) * 0.1, tension * tension * 0.6);
+  // 2. Magical Ambient Float (Fluid-like movement)
+  // Create a slow, rolling noise field that displaces particles
+  float timeScale = uTime * 0.2;
+  vec3 noiseInput = finalPos * 0.4 + vec3(timeScale);
+  vec3 displacement = vec3(
+    snoise(noiseInput),
+    snoise(noiseInput + vec3(12.4, 3.2, 1.1)),
+    snoise(noiseInput + vec3(5.1, 9.6, 2.3))
+  );
   
-  // High Tension -> Jitter/Vibrate
-  float noise = snoise(finalPos * 1.5 + uTime * (1.0 + tension * 4.0));
-  finalPos += noise * 0.05 * tension;
+  // Apply drift - more intense on outer edges
+  float dist = length(finalPos);
+  finalPos += displacement * (0.1 + dist * 0.05);
 
-  // Hand Interaction (Pinch Burst / Magnetic Pull)
-  // We map hand positions from roughly -1..1 to scene coordinates -4..4
-  vec3 lh = uLeftHand * 5.0; 
+  // 3. Hand Interaction (Magnetic Force Field)
+  vec3 lh = uLeftHand * 5.0; // Scale up from normalized 0..1 space to scene space
   vec3 rh = uRightHand * 5.0;
+  
+  float tension = (uLeftTension + uRightTension) * 0.5;
 
+  // Interaction logic: 
+  // If Pinching -> Strong Attractor (Implosion)
+  // If High Tension (Fist) -> Jittery Contraction
+  // If Open Hand -> Gentle Repulsion (Wind)
+  
   float dLeft = distance(finalPos, lh);
   float dRight = distance(finalPos, rh);
-
-  // Pinch = Local Burst/Attraction
-  if (uPinchLeft > 0.5) {
-     float influence = smoothstep(2.5, 0.0, dLeft);
-     // Attract then explode
-     finalPos = mix(finalPos, lh + (finalPos - lh) * 2.0, influence * 0.5);
-  }
+  
+  // Right Hand Interaction
   if (uPinchRight > 0.5) {
-     float influence = smoothstep(2.5, 0.0, dRight);
-     finalPos = mix(finalPos, rh + (finalPos - rh) * 2.0, influence * 0.5);
+      // Magnetic implosion
+      float force = smoothstep(3.0, 0.0, dRight); // Stronger near hand
+      finalPos = mix(finalPos, rh, force * 0.3); // Suck in
+  } else {
+      // Gentle distortion/wind from hand
+      float push = smoothstep(1.5, 0.0, dRight);
+      finalPos += displacement * push * 0.5; // Agitate near hand
   }
 
-  // Expansion based on hand distance (Palms moving apart)
-  // Map 0..1 to scale 0.5..2.0
-  float scaleFactor = 0.5 + uHandDist * 1.5;
-  finalPos *= scaleFactor;
+  // Left Hand Interaction
+  if (uPinchLeft > 0.5) {
+      float force = smoothstep(3.0, 0.0, dLeft);
+      finalPos = mix(finalPos, lh, force * 0.3);
+  } else {
+      float push = smoothstep(1.5, 0.0, dLeft);
+      finalPos += displacement * push * 0.5;
+  }
 
+  // 4. Global Scale & Pulse (Breathing)
+  // Scale increases when hands are far apart
+  float handScale = 0.6 + uHandDist * 1.8; 
+  finalPos *= handScale;
+  
+  // Tension Pulse: Fists make the whole system vibrate/contract
+  float pulse = sin(uTime * 3.0) * 0.05 * (1.0 + tension * 4.0);
+  finalPos *= 1.0 + pulse;
+
+  // Calculate Screen Position
   vec4 mvPosition = modelViewMatrix * vec4(finalPos, 1.0);
   
-  // Size attenuation
-  float sizeBoost = 1.0 + tension * 2.0; // Fists = larger particles (intensity)
-  gl_PointSize = (uSize * sizeRandom * sizeBoost) * (100.0 / -mvPosition.z);
+  // 5. Size & Sparkle Logic
+  float sparkle = 1.0 + sin(uTime * 5.0 + sizeRandom * 100.0) * 0.5; // Twinkle effect
   
+  // Particles are larger when high tension (energy surge)
+  float tensionSize = 1.0 + tension * 1.5;
+  
+  gl_PointSize = (uSize * sizeRandom * sparkle * tensionSize) * (120.0 / -mvPosition.z);
   gl_Position = projectionMatrix * mvPosition;
 
-  // Color variation
-  float distCenter = length(finalPos);
-  vAlpha = 1.0 - smoothstep(scaleFactor * 4.0, scaleFactor * 7.0, distCenter);
+  // 6. Color Data for Fragment
+  // Fade out distant particles (Fog-like)
+  float alphaFade = 1.0 - smoothstep(10.0, 20.0, -mvPosition.z);
+  vAlpha = alphaFade;
   
-  // Tension adds 'heat' (whiteness)
-  vColor = vec3(1.0 + tension); 
+  // Whiter core, colored edges
+  vColor = vec3(1.0); 
 }
 `;
 
 const FRAGMENT_SHADER = `
 uniform vec3 uBaseColor;
-
 varying vec3 vColor;
 varying float vAlpha;
 
 void main() {
-  vec2 circCoord = 2.0 * gl_PointCoord - 1.0;
-  if (dot(circCoord, circCoord) > 1.0) {
-    discard;
-  }
+  // Soft circular glow
+  vec2 coord = 2.0 * gl_PointCoord - 1.0;
+  float r = length(coord);
   
-  // Glowy center
-  float r = length(circCoord);
-  float alpha = 1.0 - smoothstep(0.5, 1.0, r);
-  float glow = exp(-r * 3.0);
+  if (r > 1.0) discard;
+
+  // "Hot" center (Gaussian-ish)
+  // 0.0 at center, 1.0 at edge
+  // We want intense brightness at center (r=0) dropping off quickly
+  float glow = pow(1.0 - r, 2.0); // Soft falloff
+  float core = pow(1.0 - r, 8.0); // Sharp bright core
+
+  // Combine base color with white core
+  vec3 color = mix(uBaseColor, vec3(1.0), core * 0.8);
   
-  gl_FragColor = vec4(uBaseColor * vColor + glow * 0.5, alpha * vAlpha);
+  // Add some bloom/halo
+  float alpha = glow * vAlpha;
+  
+  gl_FragColor = vec4(color, alpha);
 }
 `;
 
@@ -162,19 +194,18 @@ export class ThreeService {
   private targetPositions: Float32Array | null = null;
   private isMorphing = false;
   private morphStartTime = 0;
-  private morphDuration = 1000; // ms
+  private morphDuration = 1200; // ms (Slower morph for elegance)
 
   constructor(container: HTMLElement, initialCount: number) {
     this.renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
     this.renderer.setSize(container.clientWidth, container.clientHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    // Enable better color blending
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     container.appendChild(this.renderer.domElement);
 
     this.scene = new THREE.Scene();
-    // Fog for depth
-    this.scene.fog = new THREE.FogExp2(0x000000, 0.05);
+    // Deep atmospheric fog
+    this.scene.fog = new THREE.FogExp2(0x000000, 0.02);
 
     this.camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 100);
     this.camera.position.z = 7;
@@ -194,7 +225,7 @@ export class ThreeService {
     this.geometry.setAttribute('positionTarget', new THREE.BufferAttribute(this.targetPositions, 3));
     
     const randoms = new Float32Array(count);
-    for(let i=0; i<count; i++) randoms[i] = Math.random() + 0.5;
+    for(let i=0; i<count; i++) randoms[i] = Math.random() * 0.5 + 0.5; // 0.5 to 1.0
     this.geometry.setAttribute('sizeRandom', new THREE.BufferAttribute(randoms, 1));
 
     this.material = new THREE.ShaderMaterial({
@@ -203,7 +234,7 @@ export class ThreeService {
       uniforms: {
         uTime: { value: 0 },
         uMorph: { value: 0 },
-        uSize: { value: 6.0 }, 
+        uSize: { value: 4.0 }, 
         uBaseColor: { value: new THREE.Color(0x44aaff) },
         uHandDist: { value: 0.5 },
         uLeftHand: { value: new THREE.Vector3(0,0,0) },
@@ -238,7 +269,7 @@ export class ThreeService {
       this.morphStartTime = time;
     }
 
-    // Handle Morph Animation
+    // Handle Morph Animation (Cubic ease in-out)
     if (this.isMorphing) {
       const elapsed = time - this.morphStartTime;
       let progress = elapsed / this.morphDuration;
@@ -252,7 +283,7 @@ export class ThreeService {
         this.geometry!.attributes.position.needsUpdate = true;
         this.material.uniforms.uMorph.value = 0;
       } else {
-        const ease = 1 - Math.pow(1 - progress, 3);
+        const ease = progress < 0.5 ? 4 * progress * progress * progress : 1 - Math.pow(-2 * progress + 2, 3) / 2;
         this.material.uniforms.uMorph.value = ease;
       }
     }
@@ -260,18 +291,22 @@ export class ThreeService {
     // Update Uniforms
     this.material.uniforms.uTime.value = time * 0.001;
     
-    // Smooth Color Transition
-    const targetColor = new THREE.Color().setHSL(appState.colorHue / 360, 0.8, 0.6);
-    this.material.uniforms.uBaseColor.value.lerp(targetColor, 0.05);
+    // Complex Color: Tension adds brightness/whiteness
+    const baseColor = new THREE.Color().setHSL(appState.colorHue / 360, 0.9, 0.5);
+    const tensionColor = new THREE.Color(0xffffff); // White hot
+    const avgTension = (metrics.leftTension + metrics.rightTension) * 0.5;
+    
+    // Lerp base color to white based on tension
+    const displayColor = baseColor.clone().lerp(tensionColor, avgTension * 0.6);
+    this.material.uniforms.uBaseColor.value.lerp(displayColor, 0.1);
 
     // Smooth Hand Data
-    const smoothing = 0.1;
+    const smoothing = 0.08;
     this.material.uniforms.uHandDist.value += (metrics.handDistance - this.material.uniforms.uHandDist.value) * smoothing;
     
-    // We only update hand position uniforms if hands are detected to prevent particles jumping to 0,0,0
     if (metrics.hasHands) {
-      this.material.uniforms.uLeftHand.value.lerp(new THREE.Vector3(metrics.leftHandPos.x, metrics.leftHandPos.y, metrics.leftHandPos.z), smoothing);
-      this.material.uniforms.uRightHand.value.lerp(new THREE.Vector3(metrics.rightHandPos.x, metrics.rightHandPos.y, metrics.rightHandPos.z), smoothing);
+      this.material.uniforms.uLeftHand.value.lerp(metrics.leftHandPos, smoothing);
+      this.material.uniforms.uRightHand.value.lerp(metrics.rightHandPos, smoothing);
     }
     
     this.material.uniforms.uLeftTension.value += (metrics.leftTension - this.material.uniforms.uLeftTension.value) * smoothing;
@@ -280,12 +315,11 @@ export class ThreeService {
     this.material.uniforms.uPinchLeft.value = metrics.isPinchingLeft ? 1 : 0;
     this.material.uniforms.uPinchRight.value = metrics.isPinchingRight ? 1 : 0;
     
-    // Rotation based on calm mode and tension
-    // High tension = Faster rotation
-    const baseSpeed = appState.calmMode ? 0.0002 : 0.001;
-    const tensionSpeed = (metrics.leftTension + metrics.rightTension) * 0.005;
-    this.particles.rotation.y += baseSpeed + tensionSpeed;
-    this.particles.rotation.z += tensionSpeed * 0.5;
+    // Dynamic Rotation
+    const baseRot = appState.calmMode ? 0.0001 : 0.0005;
+    const tensionRot = avgTension * 0.005;
+    this.particles.rotation.y += baseRot + tensionRot;
+    this.particles.rotation.z += Math.sin(time * 0.001) * 0.0002; // Gentle swaying
     
     this.renderer.render(this.scene, this.camera);
   }

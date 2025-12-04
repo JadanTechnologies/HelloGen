@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 interface Props {
@@ -7,65 +6,78 @@ interface Props {
 
 export const OnboardingOverlay: React.FC<Props> = ({ onDismiss }) => {
   return (
-    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fade-in">
-      <div className="max-w-2xl w-full bg-neutral-900/90 border border-white/10 rounded-2xl p-8 shadow-2xl">
-        <div className="text-center mb-8">
-          <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent mb-2">
-            Welcome to MindParticle
+    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xl animate-fade-in transition-all duration-500">
+      <div className="max-w-3xl w-full mx-4 bg-neutral-900/60 border border-white/10 rounded-3xl p-8 shadow-[0_0_50px_rgba(66,153,225,0.1)] relative overflow-hidden">
+        
+        {/* Background glow effects */}
+        <div className="absolute top-0 left-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
+        <div className="absolute bottom-0 right-0 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl translate-x-1/2 translate-y-1/2 pointer-events-none" />
+
+        <div className="text-center mb-10 relative z-10">
+          <h2 className="text-4xl font-bold bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-500 bg-clip-text text-transparent mb-3 drop-shadow-sm">
+            MindParticle
           </h2>
-          <p className="text-gray-400">
-            A real-time biofeedback experience controlled by your hands.
+          <p className="text-lg text-gray-300 font-light">
+            Control the hologram with your energy.
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-6 mb-8">
-          <div className="bg-white/5 p-4 rounded-xl border border-white/5 flex flex-col items-center text-center hover:bg-white/10 transition-colors">
-            <div className="w-12 h-12 mb-3 bg-blue-500/20 rounded-full flex items-center justify-center text-blue-400 text-2xl">
+        <div className="grid md:grid-cols-2 gap-6 mb-10 relative z-10">
+          <div className="bg-white/5 p-6 rounded-2xl border border-white/5 flex items-start space-x-4 hover:bg-white/10 transition-colors group">
+            <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
               ✋
             </div>
-            <h3 className="text-white font-semibold mb-1">Open Hands</h3>
-            <p className="text-sm text-gray-400">
-              Hold palms open to expand the universe. Move hands apart to increase scale.
-            </p>
+            <div>
+              <h3 className="text-white font-semibold text-lg">Expansion</h3>
+              <p className="text-sm text-gray-400 mt-1 leading-relaxed">
+                Open your hands and move them apart to <span className="text-blue-300">expand</span> the universe. The particles breathe with you.
+              </p>
+            </div>
           </div>
 
-          <div className="bg-white/5 p-4 rounded-xl border border-white/5 flex flex-col items-center text-center hover:bg-white/10 transition-colors">
-            <div className="w-12 h-12 mb-3 bg-red-500/20 rounded-full flex items-center justify-center text-red-400 text-2xl">
+          <div className="bg-white/5 p-6 rounded-2xl border border-white/5 flex items-start space-x-4 hover:bg-white/10 transition-colors group">
+            <div className="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
               ✊
             </div>
-            <h3 className="text-white font-semibold mb-1">Close Fists</h3>
-            <p className="text-sm text-gray-400">
-              Clench fists to increase tension, pulse particles, and generate energy.
-            </p>
+            <div>
+              <h3 className="text-white font-semibold text-lg">Energy Pulse</h3>
+              <p className="text-sm text-gray-400 mt-1 leading-relaxed">
+                Clench your fists to increase <span className="text-red-300">tension</span>. The core will heat up and vibrate with intensity.
+              </p>
+            </div>
           </div>
 
-          <div className="bg-white/5 p-4 rounded-xl border border-white/5 flex flex-col items-center text-center hover:bg-white/10 transition-colors">
-            <div className="w-12 h-12 mb-3 bg-purple-500/20 rounded-full flex items-center justify-center text-purple-400 text-2xl">
+          <div className="bg-white/5 p-6 rounded-2xl border border-white/5 flex items-start space-x-4 hover:bg-white/10 transition-colors group">
+            <div className="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
               👌
             </div>
-            <h3 className="text-white font-semibold mb-1">Pinch</h3>
-            <p className="text-sm text-gray-400">
-              Pinch thumb and index finger to create magnetic bursts at that location.
-            </p>
+            <div>
+              <h3 className="text-white font-semibold text-lg">Magnetic Pinch</h3>
+              <p className="text-sm text-gray-400 mt-1 leading-relaxed">
+                Pinch your thumb and index finger to create a <span className="text-purple-300">black hole</span> that attracts particles.
+              </p>
+            </div>
           </div>
 
-          <div className="bg-white/5 p-4 rounded-xl border border-white/5 flex flex-col items-center text-center hover:bg-white/10 transition-colors">
-            <div className="w-12 h-12 mb-3 bg-green-500/20 rounded-full flex items-center justify-center text-green-400 text-2xl">
-              👋
+          <div className="bg-white/5 p-6 rounded-2xl border border-white/5 flex items-start space-x-4 hover:bg-white/10 transition-colors group">
+            <div className="w-12 h-12 bg-green-500/20 rounded-xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+              🔒
             </div>
-            <h3 className="text-white font-semibold mb-1">Privacy First</h3>
-            <p className="text-sm text-gray-400">
-              Gestures are processed locally on your device. No images are recorded.
-            </p>
+            <div>
+              <h3 className="text-white font-semibold text-lg">Local & Private</h3>
+              <p className="text-sm text-gray-400 mt-1 leading-relaxed">
+                All processing happens on your device. Your camera feed never leaves this tab.
+              </p>
+            </div>
           </div>
         </div>
 
-        <div className="flex justify-center">
+        <div className="flex justify-center relative z-10">
           <button
             onClick={onDismiss}
-            className="px-8 py-3 bg-white text-black font-bold rounded-full hover:bg-gray-200 transition-transform active:scale-95 shadow-[0_0_20px_rgba(255,255,255,0.3)]"
+            className="px-10 py-4 bg-white text-black font-bold text-lg rounded-full hover:bg-cyan-50 transition-all hover:shadow-[0_0_25px_rgba(255,255,255,0.4)] hover:-translate-y-1 active:scale-95 active:translate-y-0"
           >
-            Start Experience
+            Enter Simulation
           </button>
         </div>
       </div>

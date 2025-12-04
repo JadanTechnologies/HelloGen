@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef } from 'react';
 import { VisionService } from '../services/visionService';
 import { GestureMetrics } from '../types';
@@ -29,18 +28,24 @@ export const HandTracker: React.FC<Props> = ({ onMetricsUpdate }) => {
         });
 
         if (!isMounted) {
-          stream.getTracks().forEach(t => t.stop());
+          // Clean up immediately if unmounted during request
+          if (stream) stream.getTracks().forEach(t => t.stop());
           return;
         }
 
         videoRef.current.srcObject = stream;
         
         // Robust play handling
+        // "The play() request was interrupted by a new load request" is a common DOMException
+        // when React unmounts/remounts quickly or srcObject changes.
         try {
           await videoRef.current.play();
         } catch (playError) {
-          // If the play request was interrupted (e.g., by unmount or new load), we can safely ignore it if we are unmounted
-          if (!isMounted || (playError as Error).name === 'AbortError') {
+          const err = playError as Error;
+          // Ignore interruption errors if we are unmounted or if it's an AbortError
+          const isInterruption = err.name === 'AbortError' || err.message.includes('interrupted');
+          
+          if (!isMounted || isInterruption) {
              return;
           }
           console.warn("Video play failed:", playError);
@@ -54,7 +59,6 @@ export const HandTracker: React.FC<Props> = ({ onMetricsUpdate }) => {
       } catch (err) {
         if (isMounted) {
           console.error("Camera/Vision Init Failed", err);
-          // Optional: handle user denial or other errors gracefully
         }
       }
     };
@@ -71,7 +75,8 @@ export const HandTracker: React.FC<Props> = ({ onMetricsUpdate }) => {
       }
       
       if (videoRef.current) {
-        // Clearing srcObject acts as a 'load' which can interrupt pending play() promises
+        // Pause before clearing to prevent pending play promise rejections
+        videoRef.current.pause();
         videoRef.current.srcObject = null;
       }
     };
