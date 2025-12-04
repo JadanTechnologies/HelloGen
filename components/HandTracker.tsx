@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef } from 'react';
 import { VisionService } from '../services/visionService';
 import { GestureMetrics } from '../types';
@@ -12,13 +13,14 @@ export const HandTracker: React.FC<Props> = ({ onMetricsUpdate }) => {
 
   useEffect(() => {
     let isMounted = true;
+    let stream: MediaStream | null = null;
 
     const init = async () => {
       if (!videoRef.current) return;
 
       // Request Camera
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ 
+        stream = await navigator.mediaDevices.getUserMedia({ 
           video: { 
             width: 640,
             height: 480,
@@ -33,8 +35,16 @@ export const HandTracker: React.FC<Props> = ({ onMetricsUpdate }) => {
 
         videoRef.current.srcObject = stream;
         
-        // Wait for play to ensure data flow
-        await videoRef.current.play();
+        // Robust play handling
+        try {
+          await videoRef.current.play();
+        } catch (playError) {
+          // If the play request was interrupted (e.g., by unmount or new load), we can safely ignore it if we are unmounted
+          if (!isMounted || (playError as Error).name === 'AbortError') {
+             return;
+          }
+          console.warn("Video play failed:", playError);
+        }
 
         if (!isMounted) return;
 
@@ -44,11 +54,7 @@ export const HandTracker: React.FC<Props> = ({ onMetricsUpdate }) => {
       } catch (err) {
         if (isMounted) {
           console.error("Camera/Vision Init Failed", err);
-          // Only alert if we really failed and are still mounted
-          if ((err as Error).name !== 'AbortError') {
-             // Optional: handle user denial or other errors gracefully
-             console.log("Could not access camera or interrupted.");
-          }
+          // Optional: handle user denial or other errors gracefully
         }
       }
     };
@@ -58,9 +64,14 @@ export const HandTracker: React.FC<Props> = ({ onMetricsUpdate }) => {
     return () => {
       isMounted = false;
       serviceRef.current?.stop();
-      if (videoRef.current && videoRef.current.srcObject) {
-        const stream = videoRef.current.srcObject as MediaStream;
+      
+      // Stop the stream tracks on cleanup
+      if (stream) {
         stream.getTracks().forEach(t => t.stop());
+      }
+      
+      if (videoRef.current) {
+        // Clearing srcObject acts as a 'load' which can interrupt pending play() promises
         videoRef.current.srcObject = null;
       }
     };

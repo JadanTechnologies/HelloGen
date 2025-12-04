@@ -1,12 +1,15 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Scene3D } from './components/Scene3D';
 import { UIOverlay } from './components/UIOverlay';
 import { HandTracker } from './components/HandTracker';
+import { OnboardingOverlay } from './components/OnboardingOverlay';
 import { GestureMetrics, AppState, ParticleTemplate } from './types';
 import { INITIAL_APP_STATE } from './constants';
 
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>(INITIAL_APP_STATE);
+  const [showOnboarding, setShowOnboarding] = useState(true);
   const [metrics, setMetrics] = useState<GestureMetrics>({
     leftTension: 0,
     rightTension: 0,
@@ -34,7 +37,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="relative w-full h-full bg-black">
+    <div className="relative w-full h-full bg-black overflow-hidden select-none">
       {/* 3D Scene Layer */}
       <div className="absolute inset-0 z-0">
         <Scene3D 
@@ -54,6 +57,11 @@ const App: React.FC = () => {
           onStateChange={handleStateChange} 
         />
       </div>
+
+      {/* Onboarding Layer */}
+      {showOnboarding && (
+        <OnboardingOverlay onDismiss={() => setShowOnboarding(false)} />
+      )}
     </div>
   );
 };
