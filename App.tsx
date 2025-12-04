@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Scene3D } from './components/Scene3D';
 import { UIOverlay } from './components/UIOverlay';
 import { HandTracker } from './components/HandTracker';
+import { InputController } from './components/InputController';
 import { OnboardingOverlay } from './components/OnboardingOverlay';
 import { GestureMetrics, AppState, ParticleTemplate } from './types';
 import { INITIAL_APP_STATE } from './constants';
@@ -10,6 +11,10 @@ import { INITIAL_APP_STATE } from './constants';
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>(INITIAL_APP_STATE);
   const [showOnboarding, setShowOnboarding] = useState(true);
+  
+  // Track if real hands are currently detected
+  const [isTrackingHands, setIsTrackingHands] = useState(false);
+
   const [metrics, setMetrics] = useState<GestureMetrics>({
     leftTension: 0,
     rightTension: 0,
@@ -21,16 +26,23 @@ const App: React.FC = () => {
     hasHands: false,
   });
 
-  // We use a ref for the gesture metrics to pass to the Scene without triggering React re-renders for every frame
-  // However, we also keep a state version 'metrics' for the UI (charts, indicators) which can update less frequently if needed
   const latestMetricsRef = useRef<GestureMetrics>(metrics);
 
   const handleMetricsUpdate = useCallback((newMetrics: GestureMetrics) => {
     latestMetricsRef.current = newMetrics;
-    // Debounce state update for UI if needed, or update every frame if performant enough.
-    // For 60FPS UI updates, we can just set state.
     setMetrics(newMetrics);
   }, []);
+
+  // Handler specific for Camera updates
+  const handleCameraMetrics = useCallback((m: GestureMetrics) => {
+    if (m.hasHands) {
+      setIsTrackingHands(true);
+      handleMetricsUpdate(m);
+    } else {
+      setIsTrackingHands(false);
+      // We do not update metrics here; we let the InputController take over in the next frame
+    }
+  }, [handleMetricsUpdate]);
 
   const handleStateChange = (updates: Partial<AppState>) => {
     setAppState(prev => ({ ...prev, ...updates }));
@@ -46,8 +58,12 @@ const App: React.FC = () => {
         />
       </div>
 
-      {/* Logic Layer (No UI output, just processing) */}
-      <HandTracker onMetricsUpdate={handleMetricsUpdate} />
+      {/* Input Logic Layers */}
+      <HandTracker onMetricsUpdate={handleCameraMetrics} />
+      <InputController 
+        isActive={!isTrackingHands} 
+        onMetricsUpdate={handleMetricsUpdate} 
+      />
 
       {/* UI Layer */}
       <div className="absolute inset-0 z-10 pointer-events-none">

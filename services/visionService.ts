@@ -66,23 +66,20 @@ export class VisionService {
 
     // Helper to detect palm center (avg of wrist and finger bases)
     const getPalmCenter = (lm: NormalizedLandmark[]) => {
-      // 0 is wrist, 5 is index base, 17 is pinky base
+      // 0 is wrist, 9 is middle finger base. Midpoint is a stable center.
       return {
-        x: (lm[0].x + lm[5].x + lm[17].x) / 3,
-        y: (lm[0].y + lm[5].y + lm[17].y) / 3,
-        z: (lm[0].z + lm[5].z + lm[17].z) / 3
+        x: (lm[0].x + lm[9].x) / 2,
+        y: (lm[0].y + lm[9].y) / 2,
+        z: (lm[0].z + lm[9].z) / 2
       };
     };
 
     let leftHand: NormalizedLandmark[] | null = null;
     let rightHand: NormalizedLandmark[] | null = null;
 
-    // Simple heuristic: Left side of screen is "Left Hand" (mirrored input usually)
-    // MediaPipe hands output handedness, but for this simplified logic we sort by x coord
-    // Assuming mirrored webcam: User's Left Hand appears on Right side of screen.
-    // We will just take up to 2 hands.
-    
-    // Sort hands by x position. Lower x is user's right (screen left), Higher x is user's left (screen right)
+    // Sort hands by x position to distinguish Left/Right in a mirrored view.
+    // Screen Left (x < 0.5) is user's Right Hand.
+    // Screen Right (x > 0.5) is user's Left Hand.
     const sortedHands = [...landmarks].sort((a, b) => a[0].x - b[0].x);
 
     if (sortedHands.length === 1) {
@@ -96,8 +93,6 @@ export class VisionService {
 
     const processHand = (lm: NormalizedLandmark[]) => {
       // Tension: Distance from finger tips to wrist [0]
-      // Open hand: tips far from wrist. Closed fist: tips close.
-      // Normalize by hand scale (wrist to middle finger base [9])
       const handScale = dist(lm[0], lm[9]);
       
       const thumbDist = dist(lm[4], lm[0]);
@@ -108,11 +103,7 @@ export class VisionService {
 
       const avgDist = (thumbDist + indexDist + middleDist + ringDist + pinkyDist) / 5;
       
-      // Heuristic: Max extension is roughly 2.5 * handScale. Fist is roughly 0.8 * handScale.
-      // Tension = 1 (fist) -> 0 (open)
-      // If avgDist is high, tension is low.
       const normalizedExtension = (avgDist / handScale);
-      // Clamp 0.5 to 2.5 usually
       let tension = 1 - (normalizedExtension - 0.8) / (2.2 - 0.8);
       tension = Math.max(0, Math.min(1, tension));
 
@@ -122,29 +113,41 @@ export class VisionService {
 
       const center = getPalmCenter(lm);
       
-      return { tension, isPinching, center };
+      // Transform 0..1 to -1..1 (NDC)
+      // Mirror X: Input x grows left-to-right. 
+      // If we want mirror: Real Right hand (screen left) -> x < 0.5. 
+      // We map 0 -> -1, 1 -> 1.
+      // But for 3D, x is usually -1 (left) to 1 (right).
+      // Since video is mirrored, we just map directly:
+      // x: 0 -> -1, 1 -> 1.
+      // y: 0 (top) -> 1 (top in 3D), 1 (bottom) -> -1 (bottom in 3D).
+      // MediaPipe y is 0 at top. ThreeJS y is positive at top.
+      const ndcX = (center.x - 0.5) * 2;
+      const ndcY = -(center.y - 0.5) * 2;
+
+      return { tension, isPinching, x: ndcX, y: ndcY };
     };
 
     if (rightHand) {
       const h = processHand(rightHand);
       metrics.rightTension = h.tension;
       metrics.isPinchingRight = h.isPinching;
-      // Map 0..1 to -1..1 (inverted x for mirror effect)
-      metrics.rightHandPos = { x: -(h.center.x - 0.5) * 2 * 2, y: -(h.center.y - 0.5) * 2, z: 0 }; 
+      metrics.rightHandPos = { x: h.x, y: h.y, z: 0 }; 
     }
 
     if (leftHand) {
       const h = processHand(leftHand);
       metrics.leftTension = h.tension;
       metrics.isPinchingLeft = h.isPinching;
-      metrics.leftHandPos = { x: -(h.center.x - 0.5) * 2 * 2, y: -(h.center.y - 0.5) * 2, z: 0 };
+      metrics.leftHandPos = { x: h.x, y: h.y, z: 0 };
     }
 
     if (rightHand && leftHand) {
        const rhC = getPalmCenter(rightHand);
        const lhC = getPalmCenter(leftHand);
+       // Simple Euclidean distance in 0..1 space
        const d = Math.sqrt(Math.pow(rhC.x - lhC.x, 2) + Math.pow(rhC.y - lhC.y, 2));
-       metrics.handDistance = d; // 0 to ~1
+       metrics.handDistance = d; 
     } else {
       metrics.handDistance = 0.5;
     }
